@@ -1,0 +1,27 @@
+name: Backend CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: finmate-backend
+    env:
+      DATABASE_URL: postgresql://finmate:finmate@localhost:5432/finmate?schema=public
+      JWT_ACCESS_SECRET: ci-access-secret-at-least-16-chars
+      JWT_REFRESH_SECRET: ci-refresh-secret-at-least-16-chars
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: finmate-backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npm test
+      - run: npm run build

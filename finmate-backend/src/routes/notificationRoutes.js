@@ -1,0 +1,15 @@
+const express = require('express');
+const { requireAuth } = require('../middleware/auth');
+const { asyncHandler } = require('../middleware/errorHandler');
+const controller = require('../controllers/notificationController');
+const router = express.Router();
+router.use(requireAuth);
+router.get('/', asyncHandler(controller.list));
+router.get('/unread', asyncHandler(controller.unread));
+router.get('/preferences', asyncHandler(controller.preferences));
+router.patch('/preferences', asyncHandler(controller.updatePreferences));
+router.patch('/read-all', asyncHandler(controller.markAllRead));
+router.patch('/:id/read', asyncHandler(controller.markRead));
+router.delete('/:id', asyncHandler(controller.remove));
+router.post('/test', asyncHandler(controller.test));
+module.exports = router;

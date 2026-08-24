@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  plan         Plan     @default(FREE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens          RefreshToken[]
+  transactions           Transaction[]
+  receipts               Receipt[]
+  budgets                Budget[]
+  groupsCreated          Group[]                 @relation("GroupsCreated")
+  memberships            GroupMember[]
+  expensesPaid           GroupExpense[]          @relation("ExpensesPaid")
+  expenseShares          GroupExpenseShare[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+
+  @@map("users")
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  priority    String
+  type        String
+  action      Json?
+  dedupeKey   String?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, read, createdAt])
+  @@unique([userId, dedupeKey])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled       Boolean  @default(true)
+  budget        Boolean  @default(true)
+  forecasts     Boolean  @default(true)
+  subscriptions Boolean  @default(true)
+  savings       Boolean  @default(true)
+  aiAdvisor     Boolean  @default(true)
+  achievements  Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+// Refresh tokens stored server-side so they can be revoked (logout / rotation)
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model Transaction {
+  id        String          @id @default(uuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      TransactionType
+  amount    Decimal         @db.Decimal(12, 2)
+  category  String
+  note      String?
+  date      DateTime // when the transaction happened (not when it was recorded)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  // Set only for transactions auto-generated from a group expense split.
+  // Cascades on delete so removing a group expense cleans up every
+  // member's linked personal transaction instead of leaving orphans.
+  groupExpenseId String?
+  groupExpense   GroupExpense? @relation(fields: [groupExpenseId], references: [id], onDelete: Cascade)
+
+  // Set when a transaction is created from an OCR-scanned receipt.
+  // Cascades to NULL on delete so the transaction persists even if the receipt is deleted.
+  receiptId String?  @unique
+  receipt   Receipt? @relation("ReceiptTransaction", fields: [receiptId], references: [id], onDelete: SetNull)
+
+  // Speeds up the two most common queries: "this user's transactions"
+  // and "this user's transactions in date order"
+  @@index([userId, date])
+  @@map("transactions")
+}
+
+model Budget {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     String
+  monthlyLimit Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // A user sets at most one budget per category — re-saving the same
+  // category updates the limit instead of creating a duplicate row.
+  @@unique([userId, category])
+  @@map("budgets")
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  createdById String
+  createdBy   User     @relation("GroupsCreated", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  members  GroupMember[]
+  expenses GroupExpense[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id       String   @id @default(uuid())
+  groupId  String
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  // A user can only be added to a group once
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+model GroupExpense {
+  id          String   @id @default(uuid())
+  groupId     String
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  paidById    String
+  paidBy      User     @relation("ExpensesPaid", fields: [paidById], references: [id])
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  shares               GroupExpenseShare[]
+  personalTransactions Transaction[]
+
+  @@index([groupId])
+  @@map("group_expenses")
+}
+
+// One row per member per expense — how much of that expense they owe.
+// Stored explicitly (not computed on the fly) so the split is preserved
+// even if group membership changes later, and so custom (non-equal)
+// splits can be added later without a schema change.
+model GroupExpenseShare {
+  id             String       @id @default(uuid())
+  groupExpenseId String
+  groupExpense   GroupExpense @relation(fields: [groupExpenseId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareAmount    Decimal      @db.Decimal(12, 2)
+
+  @@unique([groupExpenseId, userId])
+  @@map("group_expense_shares")
+}
+
+model Receipt {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Cloudinary URL or local path to the receipt image
+  imageUrl String
+  publicId String?
+
+  // OCR-extracted data from the receipt
+  vendor      String?
+  receiptDate DateTime?
+  totalAmount Decimal   @db.Decimal(12, 2)
+  taxAmount   Decimal?  @db.Decimal(12, 2)
+  tipAmount   Decimal?  @db.Decimal(12, 2)
+
+  // JSON array of items extracted: [{name: string, price: number, qty?: number}, ...]
+  items Json?
+
+  // Raw OCR text for debugging or reprocessing
+  rawOcrText String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Transaction created from this receipt (one-to-one)
+  transaction Transaction? @relation("ReceiptTransaction")
+
+  // Index for common queries: user's receipts ordered by date
+  @@index([userId, receiptDate])
+  @@map("receipts")
+}

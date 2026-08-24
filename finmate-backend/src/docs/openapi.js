@@ -1,0 +1,72 @@
+const bearer = [{ bearerAuth: [] }];
+const successResponse = (description) => ({ description, content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiResponse' }, example: { data: {} } } } });
+const operation = (summary, tags, options = {}) => ({ summary, tags, ...(options.requestBody ? { requestBody: options.requestBody } : {}), ...(options.parameters ? { parameters: options.parameters } : {}), ...(options.auth === false ? {} : { security: bearer }), responses: { '200': successResponse('Successful response'), '201': successResponse('Created'), '204': { description: 'No content' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, ...(options.responses || {}) } });
+const body = (schema, example) => ({ required: true, content: { 'application/json': { schema: { $ref: `#/components/schemas/${schema}` }, example } } });
+const id = { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } };
+
+module.exports = {
+  openapi: '3.0.3',
+  info: { title: 'FinMate AI API', version: '1.0.0', description: 'JWT-protected personal finance, analytics, OCR, advisor, and notification API.' },
+  servers: [{ url: '/api', description: 'Current API host' }],
+  tags: ['Auth', 'Transactions', 'Budgets', 'Groups', 'Receipts', 'Insights', 'Predictions', 'AI Advisor', 'Notifications'].map((name) => ({ name })),
+  paths: {
+    '/auth/register': { post: operation('Register an account', ['Auth'], { auth: false, requestBody: body('RegisterRequest', { name: 'Ada Lovelace', email: 'ada@example.com', password: 'SecurePass1' }), responses: { '409': { description: 'Email already in use' } } }) },
+    '/auth/login': { post: operation('Log in and receive tokens', ['Auth'], { auth: false, requestBody: body('LoginRequest', { email: 'ada@example.com', password: 'SecurePass1' }) }) },
+    '/auth/refresh': { post: operation('Refresh an access token', ['Auth'], { auth: false }) },
+    '/auth/logout': { post: operation('Revoke the refresh token', ['Auth'], { auth: false }) },
+    '/auth/me': { get: operation('Get the authenticated user', ['Auth']) },
+    '/transactions': { get: operation('List transactions', ['Transactions'], { parameters: [{ name: 'page', in: 'query', schema: { type: 'integer', default: 1 } }, { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 100, default: 20 } }, { name: 'type', in: 'query', schema: { type: 'string', enum: ['INCOME', 'EXPENSE'] } }, { name: 'category', in: 'query', schema: { type: 'string' } }] }), post: operation('Create a transaction', ['Transactions'], { requestBody: body('TransactionRequest', { type: 'EXPENSE', amount: 299.5, category: 'Food', note: 'Lunch', date: '2026-07-21T12:00:00.000Z' }) }) },
+    '/transactions/summary': { get: operation('Get income, expense, and balance totals', ['Transactions']) },
+    '/transactions/{id}': { put: operation('Update an owned transaction', ['Transactions'], { parameters: [id], requestBody: body('TransactionRequest') }), delete: operation('Delete an owned transaction', ['Transactions'], { parameters: [id] }) },
+    '/budgets': { get: operation('List budgets with current spending', ['Budgets']), post: operation('Create or update a category budget', ['Budgets'], { requestBody: body('BudgetRequest', { category: 'Food', monthlyLimit: 8000 }) }) },
+    '/budgets/{id}': { delete: operation('Delete an owned budget', ['Budgets'], { parameters: [id] }) },
+    '/groups': { get: operation('List the current user’s groups', ['Groups']), post: operation('Create a shared group', ['Groups'], { requestBody: body('GroupRequest', { name: 'Weekend trip', memberEmails: ['friend@example.com'] }) }) },
+    '/groups/{id}': { get: operation('Get an owned group detail', ['Groups'], { parameters: [id] }), delete: operation('Delete a group as its creator', ['Groups'], { parameters: [id], responses: { '403': { description: 'Only creator can delete' } } }) },
+    '/groups/{id}/expenses': { post: operation('Add an equally split group expense', ['Groups'], { parameters: [id], requestBody: body('GroupExpenseRequest', { description: 'Dinner', amount: 1800, date: '2026-07-21T12:00:00.000Z' }) }) },
+    '/groups/{id}/balances': { get: operation('Get current group balances', ['Groups'], { parameters: [id] }) },
+    '/groups/{id}/settlement': { get: operation('Get suggested group settlement transfers', ['Groups'], { parameters: [id] }) },
+    '/receipts': {
+      get: operation('List receipts with filters and pagination', ['Receipts']),
+      post: operation('Upload a receipt image or PDF', ['Receipts'], {
+        requestBody: { required: true, content: { 'multipart/form-data': { schema: { type: 'object', required: ['receiptImage'], properties: { receiptImage: { type: 'string', format: 'binary' } } } } } },
+      }),
+    },
+    '/receipts/{id}': { get: operation('Get an owned receipt', ['Receipts'], { parameters: [id] }), delete: operation('Delete an owned receipt', ['Receipts'], { parameters: [id] }) },
+    '/receipts/{id}/convert': { post: operation('Convert a receipt to an expense transaction', ['Receipts'], { parameters: [id], requestBody: body('ReceiptConvertRequest', { category: 'Food' }), responses: { '409': { description: 'Receipt is already converted' } } }) },
+    '/insights/summary': { get: operation('Get summary, categories, anomalies, and trend comparison', ['Insights']) },
+    '/insights/spending-trends': { get: operation('Get spending trends', ['Insights']) },
+    '/insights/category-analysis': { get: operation('Get category analysis', ['Insights']) },
+    '/insights/analytics': { get: operation('Get advanced analytics', ['Insights']) },
+    '/insights/merchant-analytics': { get: operation('Get merchant analytics', ['Insights']) },
+    '/insights/subscriptions': { get: operation('Get detected subscriptions', ['Insights']) },
+    '/insights/recommendations': { get: operation('Get rule-based recommendations', ['Insights']) },
+    '/predictions/month-end': { get: operation('Forecast month-end spending', ['Predictions']) },
+    '/predictions/category': { get: operation('Forecast category spending', ['Predictions']) },
+    '/predictions/budget-risk': { get: operation('Forecast budget risk', ['Predictions']) },
+    '/predictions/cashflow': { get: operation('Forecast daily cashflow', ['Predictions']) },
+    '/ai/chat': { post: operation('Ask the rule-based financial advisor', ['AI Advisor'], { requestBody: body('ChatRequest', { message: 'How can I reduce food spending?', conversationHistory: [] }) }) },
+    '/notifications': { get: operation('List notifications', ['Notifications']) },
+    '/notifications/unread': { get: operation('List unread notifications', ['Notifications']) },
+    '/notifications/preferences': { get: operation('Get notification preferences', ['Notifications']), patch: operation('Update notification preferences', ['Notifications'], { requestBody: body('NotificationPreferenceRequest', { budget: false }) }) },
+    '/notifications/read-all': { patch: operation('Mark all notifications read', ['Notifications']) },
+    '/notifications/{id}/read': { patch: operation('Mark a notification read', ['Notifications'], { parameters: [id] }) },
+    '/notifications/{id}': { delete: operation('Delete a notification', ['Notifications'], { parameters: [id] }) },
+    '/notifications/test': { post: operation('Create a test notification', ['Notifications']) },
+  },
+  components: {
+    securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+    responses: { BadRequest: { description: 'Validation or request error', content: { 'application/json': { example: { error: 'Invalid request' } } } }, Unauthorized: { description: 'Missing, expired, or invalid token', content: { 'application/json': { example: { error: 'Invalid access token' } } } } },
+    schemas: {
+      ApiResponse: { type: 'object', additionalProperties: true, description: 'Response shape varies by endpoint; named result fields contain the resource payload.' },
+      RegisterRequest: { type: 'object', required: ['name', 'email', 'password'], properties: { name: { type: 'string' }, email: { type: 'string', format: 'email' }, password: { type: 'string', format: 'password', minLength: 8 } } },
+      LoginRequest: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string', format: 'email' }, password: { type: 'string', format: 'password' } } },
+      TransactionRequest: { type: 'object', properties: { type: { type: 'string', enum: ['INCOME', 'EXPENSE'] }, amount: { type: 'number', minimum: 0.01 }, category: { type: 'string', maxLength: 50 }, note: { type: 'string', nullable: true }, date: { type: 'string', format: 'date-time' } } },
+      BudgetRequest: { type: 'object', required: ['category', 'monthlyLimit'], properties: { category: { type: 'string' }, monthlyLimit: { type: 'number', minimum: 0.01 } } },
+      GroupRequest: { type: 'object', required: ['name', 'memberEmails'], properties: { name: { type: 'string' }, memberEmails: { type: 'array', items: { type: 'string', format: 'email' } } } },
+      GroupExpenseRequest: { type: 'object', required: ['description', 'amount'], properties: { description: { type: 'string' }, amount: { type: 'number' }, date: { type: 'string', format: 'date-time' } } },
+      ReceiptConvertRequest: { type: 'object', properties: { merchant: { type: 'string' }, amount: { type: 'number' }, category: { type: 'string' }, note: { type: 'string' }, date: { type: 'string', format: 'date-time' } } },
+      ChatRequest: { type: 'object', required: ['message'], properties: { message: { type: 'string', maxLength: 1000 }, conversationHistory: { type: 'array', maxItems: 20 } } },
+      NotificationPreferenceRequest: { type: 'object', properties: { enabled: { type: 'boolean' }, budget: { type: 'boolean' }, forecasts: { type: 'boolean' }, subscriptions: { type: 'boolean' }, savings: { type: 'boolean' }, aiAdvisor: { type: 'boolean' }, achievements: { type: 'boolean' } } },
+    },
+  },
+};

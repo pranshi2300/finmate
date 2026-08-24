@@ -1,0 +1,1 @@
+export default function NotificationBadge({ count }) { return count > 0 ? <span className="absolute -right-2 -top-2 min-w-4 rounded-full bg-signal px-1 text-center font-mono text-[10px] text-white">{count > 99 ? '99+' : count}</span> : null; }

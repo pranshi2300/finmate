@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  font-size: 19px; /* nudges every rem-based Tailwind size up a notch, app-wide */
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  font-weight: 500;
+  min-height: 100vh;
+}
+
+h1, h2, h3 {
+  font-family: "Baloo 2", cursive;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* Mono is used for labels, amounts, and buttons throughout — a slightly
+   heavier default weight keeps it legible at small sizes instead of
+   looking thin/washed out against the gradient background. */
+.font-mono {
+  font-weight: 500;
+}
+
+/* Playful hover bounce for interactive cards/buttons — a small lift +
+   scale instead of a flat color change, since this app is going for fun
+   rather than strictly corporate. */
+.fun-hover {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.fun-hover:hover {
+  transform: translateY(-2px) scale(1.015);
+  box-shadow: 0 8px 20px -6px rgba(29, 19, 48, 0.25);
+}
+/* Tactile press feedback — the element visibly compresses on click,
+   separate from the hover lift, so pressing feels like pressing. */
+.fun-hover:active {
+  transform: scale(0.97);
+  box-shadow: 0 2px 8px -4px rgba(29, 19, 48, 0.2);
+}
+
+/* Entrance animation for cards/sections as they appear — a quick fade
+   + rise instead of just popping into existence. Combine with the
+   .delay-* classes below to stagger a group of siblings. */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-in {
+  animation: fadeInUp 420ms ease both;
+}
+.delay-1 { animation-delay: 60ms; }
+.delay-2 { animation-delay: 120ms; }
+.delay-3 { animation-delay: 180ms; }
+
+/* Progress bars (budgets) fill in rather than snapping to width */
+@keyframes fillBar {
+  from { width: 0%; }
+}
+.animate-fill {
+  animation: fillBar 600ms ease-out;
+}
+
+/* Page transitions — each route mounts with a quick slide-in-from-right
+   instead of just snapping into place, so navigating between pages
+   (e.g. Dashboard -> Groups) feels like moving forward through the app. */
+@keyframes pageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.page-slide-in {
+  animation: pageSlideIn 280ms ease-out both;
+}
+
+/* Spinner for loading states, replacing static "loading…" text */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 600ms linear infinite;
+}
+
+/* The actual page gradient — used on top-level page wrappers instead of a
+   solid bg-ink color, so the gradient is actually visible instead of being
+   covered by a flat color sitting on top of it. */
+.bg-app {
+  background: linear-gradient(160deg, #C9A0DE 0%, #EAA8C6 50%, #C9AEE8 100%);
+  min-height: 100vh;
+}
+
+/* Actual card surface — until now, "cards" were just a thin border with
+   the gradient showing straight through, so they didn't read as distinct
+   surfaces. A translucent fill + soft shadow gives them real presence. */
+.card-surface {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px -8px rgba(29, 19, 48, 0.25);
+}
+.ledger-bg {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent,
+    transparent 27px,
+    #B999D9 28px
+  );
+}
+
+/* Focus states must stay visible — never remove outline without replacing it */
+:focus-visible {
+  outline: 2px solid #F43F5E;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
